@@ -26,7 +26,11 @@ import wandb
 
 from ddpm_pipeline import DDPMPipeline
 
-D = 32
+import os
+
+os.makedirs('output/', exist_ok=True)
+
+D = 128
 
 class NerfDiff(nn.Module):
     def __init__(self):
@@ -90,7 +94,7 @@ def train(rank, world_size, transfer="", use_wandb=False):
             }
         )
 
-    d = dataset('train', path='/media/foz/41bc5ab6-c5ae-4fe8-8bf7-9ed053ace67a/data/SRN/data/SRN/cars_train', imgsize=image_size, normalize_first_view=False)
+    d = dataset('train', path='./data/SRN/data/SRN/cars_train', imgsize=image_size, normalize_first_view=False)
     
     loader = DataLoader(d, batch_size=batch_size, shuffle=True, drop_last=True, num_workers=n_workers, pin_memory=True)
     
