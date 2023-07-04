@@ -13,7 +13,6 @@ from torch.utils.data import DataLoader
 from torch.optim import Adam, AdamW
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 import torch.nn.functional as F
-from img_to_triplane_unet import Unet
 from NERFdataset_k import dataset
 from nerf.network_multi import NeRFNetwork
 from nerf.utils import render_multi_view

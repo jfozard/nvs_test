@@ -6,7 +6,6 @@ from activation import trunc_exp
 from .renderer_multi import NeRFRenderer
 
 import numpy as np
-from encoding import get_encoder
 from einops import einsum
 
 from .utils import safe_normalize
