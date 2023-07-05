@@ -28,11 +28,11 @@ class NerfDiff(nn.Module):
         self.nerf = NeRFNetwork(color_feat_dim=16) # Always render at 64x64 (but 16 channels)
         self.ddpm_pipeline = KPipeline('configs/config_upscale_less_noisy.json') #KPipeline('configs/config_upscale_noisy.json')
         self.diff_aug = KarrasDiffAugmentationPipeline(a_prob = 0.1)
-	self.diff_augmentation_prob = 0.2
-	self.lambda_rgb_first=0.01 # Loss weight for rgb rendering of NeRF for first (projected) image
-	self.lambda_rgb_other=1.0 # Loss weight for rgb rendering of NeRF from novel view
-	self.lambda_opacity=0.001 # Loss weight penalizing rendering opacity
-	self.no_cond_prob=0.1 # Probability of replacing the rendered NeRF with noise,
+        self.diff_augmentation_prob = 0.2
+        self.lambda_rgb_first=0.01 # Loss weight for rgb rendering of NeRF for first (projected) image
+        self.lambda_rgb_other=1.0 # Loss weight for rgb rendering of NeRF from novel view
+        self.lambda_opacity=0.001 # Loss weight penalizing rendering opacity
+        self.no_cond_prob=0.1 # Probability of replacing the rendered NeRF with noise,
                               # and adding a learnt vector to the timestep embedding of the
                               # denoising UNet.
 
@@ -77,7 +77,7 @@ class NerfDiff(nn.Module):
         
 
 
-	if self.train_diffusion_resolution == 128:
+        if self.train_diffusion_resolution == 128:
             first_view= F.interpolate(first_view.view(B*Q, *first_view.shape[2:]), scale_factor = 2)
             first_view = first_view.view(B, Q, *first_view.shape[1:])
             first_view_rgb = first_view[:, :, :3]
