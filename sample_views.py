@@ -4,7 +4,6 @@ import os
 from imageio import imwrite
 import numpy as np
 from tqdm import tqdm
-import time
 import argparse
 
 from einops import rearrange
@@ -20,14 +19,7 @@ import torch.nn as nn
 
 from genvs_model import NerfDiff
 
-from fastai.vision.models import resnet34
-from fastai_unet import DynamicUnet
-import torch.nn as nn
-from collections import defaultdict
-
 import torch.distributed as dist
-import torch.nn as nn
-import torch.optim as optim
 import torch.multiprocessing as mp
 
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -62,7 +54,6 @@ def cleanup():
 
 
 
-import torch.nn as nn
 
 
 
@@ -76,10 +67,10 @@ def sample_sphere(model, data, source_view_idx, sample_view_batch=2):
     img = data['imgs'].cuda()
     targets = 0.5*(img+1)
     
-
+    targets = targets[:,source_view_idx]
 
     imagenet_stats = (torch.tensor([0.485, 0.456, 0.406]).cuda(), torch.tensor([0.229, 0.224, 0.225]).cuda())
-    img_tp = (targets[:,source_view_idx] - (imagenet_stats[0][None,None,:,None,None]))/(imagenet_stats[1][None,None,:,None,None]).contiguous()
+    img_tp = (targets - (imagenet_stats[0][None,None,:,None,None]))/(imagenet_stats[1][None,None,:,None,None]).contiguous()
 
     B, V = img_tp.shape[:2]
     img_tp = img_tp.view(B*V,*img_tp.shape[2:])
@@ -96,6 +87,8 @@ def sample_sphere(model, data, source_view_idx, sample_view_batch=2):
     cameras  = (camera_k, camera_d, poses[:,source_view_idx].contiguous())
 
     render_output_views = []
+    render_rgb_views = []
+
     render_output_depth = []
     render_output_opacities = []
 
@@ -141,7 +134,7 @@ def sample_sphere(model, data, source_view_idx, sample_view_batch=2):
 
         render_output_depth.append(d1.cpu())
         render_output_opacities.append(o1.cpu())
-
+        render_rgb_views.append(first_view_rgb.cpu())
 
         samples1 = model.module.ddpm_pipeline.sample(first_view.view(B*QQ, *first_view.shape[2:]))
         samples1 = samples1.view(B, Q, *samples1.shape[1:])
@@ -149,10 +142,9 @@ def sample_sphere(model, data, source_view_idx, sample_view_batch=2):
         render_output_views.append(samples1.cpu())
 
     render_output_views = torch.cat(render_output_views, dim=1)
+    render_rgb_views = torch.cat(render_rgb_views, dim=1)
 
-    print(targets.shape, render_output_views.shape)
-
-    return targets[:,:1].cpu().expand(-1,np,-1,-1,-1), render_output_views, render_output_depth, render_output_opacities
+    return targets.cpu(), render_output_views, render_rgb_views, render_output_depth, render_output_opacities
 
 
 
@@ -238,6 +230,7 @@ def sample(model, data, source_view_idx, sample_view_batch=2):
     render_output_views = []
     render_output_depth = []
     render_output_opacities = []
+    render_rgb_views = []
 
     Q = 2
     np = poses.shape[1]
@@ -268,6 +261,7 @@ def sample(model, data, source_view_idx, sample_view_batch=2):
 
         render_output_depth.append(d1.cpu())
         render_output_opacities.append(o1.cpu())
+        render_rgb_views.append(first_view_rgb.cpu())
 
 
         samples1 = model.module.ddpm_pipeline.sample(first_view.view(B*QQ, *first_view.shape[2:]))
@@ -276,10 +270,9 @@ def sample(model, data, source_view_idx, sample_view_batch=2):
         render_output_views.append(samples1.cpu())
 
     render_output_views = torch.cat(render_output_views, dim=1)
+    render_rgb_views = torch.cat(render_rgb_views, dim=1)
 
-    print(targets.shape, render_output_views.shape)
-
-    return targets.cpu(), render_output_views, render_output_depth, render_output_opacities
+    return targets.cpu(), render_output_views, render_rgb_views, render_output_depth, render_output_opacities
 
 
 
@@ -340,23 +333,31 @@ def sample_images(rank, world_size, transfer="", use_wandb = False):
     
     pbar = tqdm(loader)
 
+    cond_view_list = [0, 1]
+
     for step, data in enumerate(pbar):
         if step==n_samples:
             cleanup()
             return
 
-        original_views, render_output_views, render_output_depth, render_output_opacities = sample_sphere(model, data, [0,1,2,3])
+        original_views, render_output_views, render_rgb_views, render_output_depth, render_output_opacities = sample_sphere(model, data, cond_view_list)
 
-        for k in range(original_views.shape[1]):
+        conditioning_views = original_views
+        output = np.concatenate([v.numpy().transpose(1,2,0) for v in conditioning_views[0,:]])
+        output = (255*np.clip(output,0,1)).astype(np.uint8)
+
+        imwrite(f'output_view/conditioning-{step:06d}.png', output)
+
+        for k in range(render_output_views.shape[1]):
  
-            output = np.concatenate(((original_views[0,k].numpy().transpose(1,2,0), 
-                                      render_output_views[0,k].numpy().transpose(1,2,0))))
+            output = np.concatenate(((render_output_views[0,k].numpy().transpose(1,2,0),
+                                      render_rgb_views[0,k].numpy().transpose(1,2,0))))
             
             
             output = (255*np.clip(output,0,1)).astype(np.uint8)
             imwrite(f'output_view/sample-{step:06d}-{k}.png', output)
 
-        del original_views, render_output_views, render_output_depth, render_output_opacities
+        del original_views, render_output_views, render_rgb_views, render_output_depth, render_output_opacities
 
             
     cleanup()
