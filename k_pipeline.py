@@ -63,6 +63,15 @@ class KPipeline(nn.Module):
         return x_0.clip(-1.0,1.0)
     
     @torch.no_grad()
+    def sample_uc(self, cond, sampling_timesteps=None):
+        cond = torch.rand_like(cond)
+        x = torch.randn([cond.shape[0], self.config['model']['input_channels'], self.size[0], self.size[1]], device=cond.device) * self.sigma_max
+        sigmas = K.sampling.get_sigmas_karras(50 if sampling_timesteps is None else sampling_timesteps, self.sigma_min, self.sigma_max, rho=7., device=cond.device)
+        x_0 = K.sampling.sample_dpmpp_2m(self.model, x, sigmas, extra_args={'unet_cond':cond})
+        print(x_0.min(), x_0.max())
+        return x_0.clip(-1.0,1.0)
+    
+    @torch.no_grad()
     def sample_all(self, cond, sampling_timesteps=None):
         x = torch.randn([cond.shape[0], self.config['model']['input_channels'], self.size[0], self.size[1]], device=self.device) * self.sigma_max
         sigmas = K.sampling.get_sigmas_karras(50 if sampling_timesteps is None else sampling_timesteps, self.sigma_min, self.sigma_max, rho=7., device=cond.device)
