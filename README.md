@@ -81,6 +81,15 @@ https://github.com/jfozard/nvs_test/assets/4390954/9f1839e1-cb54-4e56-874c-5b6ee
 
 https://github.com/jfozard/nvs_test/assets/4390954/ad85cb01-93e7-44a4-b766-ef277a63d7c8
 
+Unconditional samples (Supply noise conditioning image to diffusing model)
+
+![uc-sample-000000-0](https://github.com/jfozard/nvs_test/assets/4390954/1d8de1dd-38f2-4201-b83c-be37df7d673d)
+
+![uc-sample-000000-1](https://github.com/jfozard/nvs_test/assets/4390954/a6238dd8-d2a6-4638-a53d-4dafe062422d)
+
+![uc-sample-000000-2](https://github.com/jfozard/nvs_test/assets/4390954/c351ee7c-d3b9-4b73-a4b8-52c6d6dafaef)
+
+![uc-sample-000000-16](https://github.com/jfozard/nvs_test/assets/4390954/bd2d8957-3549-4bab-ad72-13bf96e9efb6)
 
 
 
