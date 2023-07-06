@@ -42,15 +42,21 @@ From https://github.com/a6o/3d-diffusion-pytorch , there is a pickle file that c
 Sample weights at X.
 
 Model was pre-trained by training the projection UNet / NeRF with just supervision of RGB outputs (~12hr 3090).
-A seperate (unconditional) denoising model was trained (~12hr) on the cars dataset at 64x64 using the k-diffusion
+
+A separate (unconditional) denoising model was trained (~12hr) on the cars dataset at 64x64 using the k-diffusion
 repository. (Checkpoint at X).
+
 These two sets of model weights were then combined, and finetuned (at output resolution of 64x64). (~24hr 3090)
+
 Increased SNR levels (lonormal distribution with mean 1.0, standard deviation 1.4) were used for this (see k-configs/config_64_cars_noisy.json).
+
 This seems sensible as unlike standard text-to-image diffusion models, the additional information
 from the rendered view should permit reasonably good prediction of the densoised image x_0 even at high noise levels.
 The standard schedule concentrates mostly on lower ones, at which noise levels features such as the colour
 of the car can be extracted easily from the noisy image, discarding additional cues from the rendered image.
+
 Training was then scaled up to 128x128, extending the denoising unet with extra convolutional layers.
+
 After another bit of training (8-12 hr), noise levels were dropped slightly.
 
 
@@ -87,5 +93,7 @@ https://github.com/jfozard/nvs_test/assets/4390954/ad85cb01-93e7-44a4-b766-ef277
 ## Acknowledgements
 
 K-diffusion from Katherine Crawson and others https://github.com/crowsonkb/k-diffusion
+
 Nerf rendering using an old version of ashawkey's excellent https://github.com/ashawkey/stable-dreamfusion
+
 Some data pipeline from https://github.com/a6o/3d-diffusion-pytorch and https://github.com/halixness/distributed-3d-diffusion-pytorch
