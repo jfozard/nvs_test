@@ -96,10 +96,9 @@ def sample_sphere(model, data, source_view_idx, sample_view_batch=2):
 
     print('poses', poses.shape, camera_d.shape)
 
-    np = 120
     
     ref_pose = poses[:,0]
-    sphere_poses = generate_spherical_cam_to_world(camera_d[0].cpu(), n_poses=20)
+    sphere_poses = generate_spherical_cam_to_world(camera_d[0].cpu(), n_poses=120)
   
     poses = torch.tensor(sphere_poses[None]).cuda()
 

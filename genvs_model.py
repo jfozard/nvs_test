@@ -16,6 +16,8 @@ import random
 from k_pipeline import KPipeline
 from k_diffusion.augmentation import KarrasDiffAugmentationPipeline
 
+os.makedirs('sample_output', exist_ok=True)
+
 def make_input_model(size=128, out_dim=3*48):
     """
     Function to make a dynamic U-Net model for input image.
@@ -78,6 +80,7 @@ class NerfDiff(nn.Module):
     
     def __init__(self,
                  input_size=128,
+                 train_diffusion_resolution=128,
                  color_feat_dim=16,
                  depth_size=64,
                  a_prob=0.1,
@@ -86,7 +89,7 @@ class NerfDiff(nn.Module):
                  lambda_rgb_first=0.01,
                  lambda_rgb_other=1.0,
                  lambda_opacity=0.001,
-                 lambda_diffuse=1.0,
+                 lambda_diffusion=1.0,
                  no_cond_prob=0.1):
 
         super().__init__()
@@ -98,10 +101,11 @@ class NerfDiff(nn.Module):
         self.lambda_rgb_first = lambda_rgb_first # Loss weight for rgb rendering of NeRF for first (projected) image
         self.lambda_rgb_other = lambda_rgb_other # Loss weight for rgb rendering of NeRF from novel view
         self.lambda_opacity = lambda_opacity # Loss weight penalizing rendering opacity
-        self.lambda_diffuse = lambda_diffuse # Loss weight for diffusion objective
+        self.lambda_diffusion = lambda_diffusion # Loss weight for diffusion objective
         self.no_cond_prob= no_cond_prob # Probability of replacing the rendered NeRF with normally distributed noise,
                               # and adding a learnt vector to the timestep embedding of the
                               # denoising UNet.
+        self.train_diffusion_resolution = train_diffusion_resolution
 
     def forward(self, data):
         """

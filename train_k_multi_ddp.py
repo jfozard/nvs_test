@@ -55,6 +55,8 @@ from k_pipeline import KPipeline
 
 from k_diffusion.augmentation import KarrasDiffAugmentationPipeline
 
+output_dir = 'output/'
+os.makedirs(output_dir, exist_ok=True)
 
 def setup(rank, world_size):
     """
@@ -172,6 +174,8 @@ def train(rank, world_size, cfg):
     cfg (dict): Configuration dictionary
     """
     setup(rank, world_size)
+
+    print(os.listdir())
 
     transfer = cfg["transfer"] #(str): Path to a pretrained model if transfer learning is to be performed. Default is "".
     use_wandb = cfg["use_wandb"] #(bool): Whether to use Weights & Biases for logging and visualization. Default is False.
@@ -378,13 +382,13 @@ def train(rank, world_size, cfg):
                     
 
                         output = (255*np.clip(output,0,1)).astype(np.uint8)
-                        imwrite(f'output4/full-{step:06d}-{vv}-{k}.png', output)
+                        imwrite(f'{output_dir}/full-{step:06d}-{vv}-{k}.png', output)
                         if use_wandb:
                             formatted_images.append(wandb.Image(output, caption=f"{vv}-{k}"))
 
                     for i in range(len(samples)):
                         s = (255*(samples[i].clip(0,1)).cpu().detach().numpy().transpose(1,2,0)).astype(np.uint8)
-                        imwrite(f'output4/sample-{step:06d}-{vv}-{i}.png', s)
+                        imwrite(f'{output_dir}/sample-{step:06d}-{vv}-{i}.png', s)
                         if use_wandb:
                             formatted_images.append(wandb.Image(s, caption=f"sample-{vv}-{i}"))
 
@@ -411,12 +415,12 @@ def train(rank, world_size, cfg):
 
         # Epoch checkpoint save
         if e % epochs_plot_loss == 0 and rank==0:
-            torch.save({'optim':optimizer.state_dict(), 'model':model.module.state_dict(), 'step':step, 'epoch':e}, "output4/large-k-multi-latest.pt")
+            torch.save({'optim':optimizer.state_dict(), 'model':model.module.state_dict(), 'step':step, 'epoch':e}, f"{output_dir}/large-k-multi-latest.pt")
         if e % epochs_plot_loss2 == 0 and rank==0:
-            torch.save({'optim':optimizer.state_dict(), 'model':model.module.state_dict(), 'step':step, 'epoch':e}, f"output4/large-k-multi-epoch-{e}.pt")
+            torch.save({'optim':optimizer.state_dict(), 'model':model.module.state_dict(), 'step':step, 'epoch':e}, f"{output_dir}/large-k-multi-epoch-{e}.pt")
 
     
-@hydra.main(config_name="config")
+@hydra.main(version_base="1.2", config_path="config", config_name="config")
 def main(cfg : DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
     n_gpus = torch.cuda.device_count()
