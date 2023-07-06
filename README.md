@@ -65,8 +65,17 @@ These clearly need a bit more training!
 
 Conditioning images
 
+![conditioning-000000](https://github.com/jfozard/nvs_test/assets/4390954/39d3d6fe-64d4-4b4b-8c3f-1ca4533c3801)
+
+![conditioning-000001](https://github.com/jfozard/nvs_test/assets/4390954/8ffde116-57b0-4ef1-8384-befa17e9de61)
 
 Novel views generated (upper - denoised samples, lower- RGB renderings from NeRF)
+
+https://github.com/jfozard/nvs_test/assets/4390954/9f1839e1-cb54-4e56-874c-5b6ee7eb0eff
+
+https://github.com/jfozard/nvs_test/assets/4390954/ad85cb01-93e7-44a4-b766-ef277a63d7c8
+
+
 
 
 
