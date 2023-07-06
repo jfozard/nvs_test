@@ -268,8 +268,7 @@ def sample_images(rank, world_size, transfer="", use_wandb = False):
 
         for k in range(render_output_views.shape[1]):
  
-            output = np.concatenate(((render_output_views[0,k].numpy().transpose(1,2,0),
-                                      render_rgb_views[0,k].numpy().transpose(1,2,0))))
+            output = render_output_views[0,k].numpy().transpose(1,2,0)
             
             
             output = (255*np.clip(output,0,1)).astype(np.uint8)
