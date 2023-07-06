@@ -39,7 +39,7 @@ From https://github.com/a6o/3d-diffusion-pytorch , there is a pickle file that c
 
 ## Pre-trained Model Weights:
 
-Sample weights at X.
+Sample weights at https://www.dropbox.com/s/3z0c1wgnw4o23en/large-k-multi-latest.pt?dl=0.
 
 Model was pre-trained by training the projection UNet / NeRF with just supervision of RGB outputs (~12hr 3090).
 
