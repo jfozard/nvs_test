@@ -44,7 +44,7 @@ class _RepeatSampler(object):
 
 class dataset(Dataset):
     
-    def __init__(self, split, path='/media/foz/41bc5ab6-c5ae-4fe8-8bf7-9ed053ace67a/data/SRN/data/SRN/cars_train/', picklefile='data/cars.pickle', imgsize=128, nerf_view=None, normalize_first_view=True, nimg=4):
+    def __init__(self, split, path='data/cars_train/', picklefile='data/cars.pickle', imgsize=128, nerf_view=None, normalize_first_view=True, nimg=4):
         self.imgsize = imgsize
         self.path = path
         super().__init__()
