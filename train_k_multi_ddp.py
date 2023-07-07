@@ -418,6 +418,11 @@ def train(rank, world_size, cfg):
             torch.save({'optim':optimizer.state_dict(), 'model':model.module.state_dict(), 'step':step, 'epoch':e}, f"{output_dir}/large-k-multi-latest.pt")
         if e % epochs_plot_loss2 == 0 and rank==0:
             torch.save({'optim':optimizer.state_dict(), 'model':model.module.state_dict(), 'step':step, 'epoch':e}, f"{output_dir}/large-k-multi-epoch-{e}.pt")
+            if use_wandb:
+                wandb.save(f"{output_dir}/large-k-multi-epoch-{e}.pt")
+
+
+            
 
     
 @hydra.main(version_base="1.2", config_path="config", config_name="config")
