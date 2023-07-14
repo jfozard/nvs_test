@@ -257,8 +257,11 @@ class NeRFRenderer(nn.Module):
             bg_color = self.background(rays_d) # [N, 3]
         elif self.bg_radius ==0:
             bg_color = 1
+
+        bg_depth = 2.0
             
         image = image + (1 - weights_sum).unsqueeze(-1) * bg_color
+        #depth = (depth+0.1*bg_depth)/(weights_sum+0.1) #+ (1 - weights_sum) * bg_depth
 
         image = image.view(*prefix, self.color_feat_dim)
         depth = depth.view(*prefix)

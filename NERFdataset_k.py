@@ -44,7 +44,7 @@ class _RepeatSampler(object):
 
 class dataset(Dataset):
     
-    def __init__(self, split, path='data/cars_train/', picklefile='data/cars.pickle', imgsize=128, nerf_view=None, normalize_first_view=True, nimg=4):
+    def __init__(self, split, path='data/cars_train/', picklefile='data/cars.pickle', imgsize=128, nerf_view=None, normalize_first_view=True, nimg=4, seed=1):
         self.imgsize = imgsize
         self.path = path
         super().__init__()
@@ -54,7 +54,7 @@ class dataset(Dataset):
 
         print(len(allthevid))
         
-        random.seed(0)
+        random.seed(seed)
         random.shuffle(allthevid)
         if split == 'train':
             self.ids = allthevid[:int(len(allthevid)*0.9)]

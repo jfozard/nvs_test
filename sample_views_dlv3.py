@@ -17,7 +17,7 @@ from NERFdataset_k import dataset
 from nerf.utils import render_multi_view
 import torch.nn as nn
 
-from genvs_model import NerfDiff
+from genvs_model import NerfDiffDLV3
 
 import torch.distributed as dist
 import torch.multiprocessing as mp
@@ -141,6 +141,8 @@ def sample_sphere(model, data, source_view_idx, sample_view_batch=2):
         render_output_views.append(samples1.cpu())
 
     render_output_views = torch.cat(render_output_views, dim=1)
+    render_output_depth = torch.cat(render_output_depth, dim=1)
+    render_output_opacities = torch.cat(render_output_opacities, dim=1)
     render_rgb_views = torch.cat(render_rgb_views, dim=1)
 
     return targets.cpu(), render_output_views, render_rgb_views, render_output_depth, render_output_opacities
@@ -192,7 +194,7 @@ def generate_spherical_cam_to_world(radius, n_poses=120, d_th=-5, d_phi=-5):
         return cam_to_world
 
     spheric_cams = []
-    for th, phi in zip(np.linspace(0, 2 * np.pi, n_poses + 1)[:-1], np.linspace(10, -60, n_poses + 1)[:-1]):
+    for th, phi in zip(np.linspace(0, 4 * np.pi, n_poses + 1)[:-1], np.linspace(10, -60, n_poses + 1)[:-1]):
         spheric_cams += [spheric_pose(th, phi, radius)]
 
     return np.stack(spheric_cams, 0)
@@ -258,6 +260,10 @@ def sample(model, data, source_view_idx, sample_view_batch=2):
         o1 = F.interpolate(o1.view(B*QQ,*o1.shape[2:]), scale_factor = 2).expand(-1,3,-1,-1)
         o1 = o1.view(B, Q, *o1.shape[1:])
 
+
+        d1 = d1 - d1.min()
+        d1 = d1 / d1.max()
+        
         render_output_depth.append(d1.cpu())
         render_output_opacities.append(o1.cpu())
         render_rgb_views.append(first_view_rgb.cpu())
@@ -303,7 +309,7 @@ def sample_images(rank, world_size, transfer="", cond_views=1, use_wandb = False
     sampler, loader = prepare(rank, world_size, d, batch_size=batch_size)
 
     # Model setting
-    model = NerfDiff().cuda()
+    model = NerfDiffDLV3().cuda()
     
     model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
 
@@ -346,17 +352,20 @@ def sample_images(rank, world_size, transfer="", cond_views=1, use_wandb = False
         output = np.concatenate([v.numpy().transpose(1,2,0) for v in conditioning_views[0,:]])
         output = (255*np.clip(output,0,1)).astype(np.uint8)
 
-        imwrite(f'output_view/conditioning-{cond_views}-{step:06d}.png', output)
+        imwrite(f'output_view_dlv3/conditioning-{cond_views}-{step:06d}.png', output)
 
+        
         for k in range(render_output_views.shape[1]):
  
             output = np.concatenate(((#original_views[0,k].numpy().transpose(1,2,0),
                                       render_output_views[0,k].numpy().transpose(1,2,0),
-                                      render_rgb_views[0,k].numpy().transpose(1,2,0))))
+                                      render_rgb_views[0,k].numpy().transpose(1,2,0),
+                                      render_output_depth[0,k].numpy().transpose(1,2,0),
+                                      render_output_opacities[0,k].numpy().transpose(1,2,0))))
             
             
             output = (255*np.clip(output,0,1)).astype(np.uint8)
-            imwrite(f'output_view/sample-{cond_views}-{step:06d}-{k}.png', output)
+            imwrite(f'output_view_dlv3/sample-{cond_views}-{step:06d}-{k}.png', output)
 
         del original_views, render_output_views, render_rgb_views, render_output_depth, render_output_opacities
 

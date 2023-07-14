@@ -23,7 +23,7 @@ from torch.optim import  AdamW
 from torch.optim.lr_scheduler import CosineAnnealingWarmRestarts
 import torch.nn.functional as F
 from NERFdataset_k import dataset
-from genvs_model import NerfDiff
+from genvs_model import NerfDiffDLV3
 from nerf.utils import render_multi_view
 import torch.nn as nn
 
@@ -55,7 +55,7 @@ from k_pipeline import KPipeline
 
 from k_diffusion.augmentation import KarrasDiffAugmentationPipeline
 
-output_dir = 'output_tmp/'
+output_dir = 'output_dlv3_2/'
 os.makedirs(output_dir, exist_ok=True)
 
 def setup(rank, world_size):
@@ -139,7 +139,7 @@ def sample(model, data, nv):
 
     cameras  = (camera_k, camera_d, poses[:,:nv])
 
-    Q = 2
+    Q = 4
 
     render_poses = poses[:,:(Q)]    
 
@@ -156,13 +156,20 @@ def sample(model, data, nv):
     o1 = o1.view(B, Q, *o1.shape[1:])
 
 
+    d1 = d1 - d1.min()
+    d1 = d1/d1.max()
+
     samples1 = model.module.ddpm_pipeline.sample(first_view.view(B*Q, *first_view.shape[2:]))
 
 
-    return targets[:,0], first_view_rgb[:,0], d1[:,0], o1[:,0], targets[:,1], first_view_rgb[:,1], d1[:,1], o1[:,1], samples1 #torch.cat((samples1, samples2), dim=0)
+#    return targets[:,0], first_view_rgb[:,0], d1[:,0], o1[:,0], targets[:,1], first_view_rgb[:,1], d1[:,1], o1[:,1], samples1 #torch.cat((samples1, samples2), dim=0)
+    return targets[:,:Q], first_view_rgb, d1, o1, samples1 #torch.cat((samples1, samples2), dim=0)
 
 
-
+def stack_img(v):
+    v = v.cpu().clip(0,1).numpy().transpose(0,1,3,4,2)
+    v = v.reshape(v.shape[0], v.shape[1]*v.shape[2], v.shape[3], v.shape[4])
+    return v
 
 def train(rank, world_size, cfg):
     """
@@ -218,7 +225,7 @@ def train(rank, world_size, cfg):
 
     # Model setting
     nerf_diff_params = cfg.nerf_diff
-    model = NerfDiff(**nerf_diff_params).cuda()
+    model = NerfDiffDLV3(**nerf_diff_params).cuda()
     
     model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
 
@@ -226,7 +233,9 @@ def train(rank, world_size, cfg):
 
 
     use_amp=cfg.use_amp
-    optimizer = AdamW([{'params':model.module.input_unet.parameters(), 'lr':1e-4}, {'params':model.module.nerf.parameters(), 'lr':2e-4}, {'params':model.module.ddpm_pipeline.parameters(), 'lr':2e-4}], betas=(0.9, 0.99), eps=1e-8, weight_decay=1e-2) # NERF
+    #optimizer = AdamW([{'params':model.module.input_unet.parameters(), 'lr':1e-4}, {'params':model.module.nerf.parameters(), 'lr':2e-4}, {'params':model.module.ddpm_pipeline.parameters(), 'lr':1e-5}], betas=(0.9, 0.99), eps=1e-8, weight_decay=1e-2) # NERF
+    optimizer = AdamW([{'params':model.module.input_unet.parameters(), 'lr':cfg.lr_in}, {'params':model.module.nerf.parameters(), 'lr':cfg.lr_nerf}, {'params':model.module.ddpm_pipeline.parameters(), 'lr':cfg.lr_diff}], betas=(0.9, 0.99), eps=1e-8, weight_decay=1e-2) # NERF
+#    optimizer = AdamW([{'params':model.module.input_unet.parameters(), 'lr':1e-4}, {'params':model.module.nerf.parameters(), 'lr':2e-4}], betas=(0.9, 0.99), eps=1e-8, weight_decay=1e-2) # NERF
     scaler = torch.cuda.amp.GradScaler(enabled=use_amp)
 
     # Load saved model if defined
@@ -263,7 +272,7 @@ def train(rank, world_size, cfg):
 
             transfer_filename = cfg['transfer_filename']
             ckpt = torch.load(os.path.join(transfer, transfer_filename))
-            model.module.load_state_dict(new_ckpt, strict=False)
+            model.module.load_state_dict(ckpt, strict=False)
 
             k_ckpt = torch.load(cfg['k_checkpoint_path'])
             k_weights = k_ckpt['model']
@@ -290,7 +299,7 @@ def train(rank, world_size, cfg):
             ckpt = torch.load(os.path.join(transfer, transfer_filename))
 
 
-            model.module.load_state_dict(ckpt['model'])
+            model.module.load_state_dict(ckpt['model'], strict=False)
             if load_optim:
                 optimizer.load_state_dict(ckpt['optim'])
 
@@ -373,13 +382,18 @@ def train(rank, world_size, cfg):
 
                 formatted_images = []
                 for vv in [1,2]:
-                    img1, v1, d1, o1, img2, v2, d2, o2, samples = sample(model, data, vv)
+                    img1, v1, d1, o1, samples = sample(model, data, vv)
 
+                    img1 = stack_img(img1)
+                    v1 = stack_img(v1)
+                    d1 = stack_img(d1)
+                    o1 = stack_img(o1)
+                    
                     print('img1', img1.shape)
                     for k in range(len(img1)):
-                        output = np.concatenate((np.concatenate((img1.cpu().detach().numpy()[k].transpose(1,2,0), v1.cpu().detach().numpy()[k].transpose(1,2,0), torch.clip(d1,0,1).cpu().detach().numpy()[k].transpose(1,2,0), torch.clip(o1,0,1).cpu().detach().numpy()[k].transpose(1,2,0)), axis=1),
-                                            np.concatenate((img2.cpu().detach().numpy()[k].transpose(1,2,0), v2.cpu().detach().numpy()[k].transpose(1,2,0), torch.clip(d2,0,1).cpu().detach().numpy()[k].transpose(1,2,0), torch.clip(o2,0,1).cpu().detach().numpy()[k].transpose(1,2,0)), axis=1)), axis=0)
-                    
+#                        output = np.concatenate((np.concatenate((img1.cpu().detach().numpy()[k].transpose(1,2,0), v1.cpu().detach().numpy()[k].transpose(1,2,0), torch.clip(d1,0,1).cpu().detach().numpy()[k].transpose(1,2,0), torch.clip(o1,0,1).cpu().detach().numpy()[k].transpose(1,2,0)), axis=1),
+#                                            np.concatenate((img2.cpu().detach().numpy()[k].transpose(1,2,0), v2.cpu().detach().numpy()[k].transpose(1,2,0), torch.clip(d2,0,1).cpu().detach().numpy()[k].transpose(1,2,0), torch.clip(o2,0,1).cpu().detach().numpy()[k].transpose(1,2,0)), axis=1)), axis=0)
+                        output = np.concatenate((img1[k], v1[k], d1[k], o1[k]), axis=1)
 
                         output = (255*np.clip(output,0,1)).astype(np.uint8)
                         imwrite(f'{output_dir}/full-{step:06d}-{vv}-{k}.png', output)
@@ -393,7 +407,7 @@ def train(rank, world_size, cfg):
                             formatted_images.append(wandb.Image(s, caption=f"sample-{vv}-{i}"))
 
 
-                del img1, v1, d1, o1, img2, v2, d2, o2, samples
+                del img1, v1, d1, o1, samples
 
                 if use_wandb:
                     wandb.log({"validation": formatted_images})
@@ -425,7 +439,7 @@ def train(rank, world_size, cfg):
             
 
     
-@hydra.main(version_base="1.2", config_path="config", config_name="config")
+@hydra.main(version_base="1.2", config_path="config", config_name="config64")
 def main(cfg : DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
     n_gpus = torch.cuda.device_count()
