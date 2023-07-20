@@ -43,15 +43,16 @@ class _RepeatSampler(object):
 
 class dataset(Dataset):
     
-    def __init__(self, split, path='data/cars_train/', picklefile='data/cars.pickle', imgsize=128, nerf_view=None, normalize_first_view=True, nimg=4, seed=1):
+    def __init__(self, split, path='data/cars_train/', picklefile='data/cars.pickle', imgsize=128, nerf_view=(0,0), normalize_first_view=True, nimg=4, seed=1):
         self.imgsize = imgsize
         self.path = path
         super().__init__()
-        self.picklefile = pickle.load(open(picklefile, 'rb'))
+        self.picklefile = {}
+        for d in os.listdir(path):
+            print(d)
+            self.picklefile[d] = os.listdir(path + d + '/rgb/')
         
         allthevid = sorted(list(self.picklefile.keys()))
-
-        print(len(allthevid))
         
         random.seed(seed)
         random.shuffle(allthevid)
@@ -69,8 +70,6 @@ class dataset(Dataset):
     
     def __getitem__(self,idx):
 
-        idx = idx 
-
         if self.nerf_view:
             idx, first = self.nerf_view
 
@@ -79,8 +78,7 @@ class dataset(Dataset):
         intrinsics_filename = os.path.join(self.path, item, 'intrinsics', self.picklefile[item][0][:-4] + ".txt")
         K = np.array(open(intrinsics_filename).read().strip().split()).astype(float).reshape((3,3))
 
-        if self.nerf_view:
-            
+        if self.nerf_view:            
             indices = [self.picklefile[item][first]] + random.sample(self.picklefile[item], k=self.nimg-1) #random.sample(self.picklefile[item], k=2)
         elif self.nimg is None:
             indices = self.picklefile[item]
@@ -99,8 +97,7 @@ class dataset(Dataset):
             
             img = img.transpose(2,0,1)[:3].astype(np.float32)
             imgs.append(img)
-            
-            
+                        
             pose_filename = os.path.join(self.path, item, 'pose', i[:-4]+".txt")
             pose = np.array(open(pose_filename).read().strip().split()).astype(float).reshape((4,4))
             R = np.array([[1,0,0],[0,-1,0],[0,0,-1]])
@@ -112,7 +109,6 @@ class dataset(Dataset):
         T0 = poses[0][:3,3]
         d0 = la.norm(T0)
 
-        camera_d = d0
 
         ref_pose = np.array([[1,0,0,0],[0,1,0,0],[0,0,1,d0],[0,0,0,1]])
         
@@ -127,15 +123,17 @@ class dataset(Dataset):
         else:
             new_poses = poses
 
+        camera_d = d0
+
         imgs = np.stack(imgs, 0)
         poses = np.stack(new_poses, 0).astype(np.float32)
         R = poses[:, :3, :3]
         T = poses[:, :3, 3]
+        camera_d = la.norm(T, axis=1)
         
         intrinsics = np.array([K[0,0]/8, K[1,1]/8, K[0,2]/8, K[1,2]/8]).astype(np.float32)
 
         camera_k = K[0,0]/K[0,2]
-
         
         return {'imgs':imgs, 'poses':poses, 'intrinsics':intrinsics, 'K':K, 'camera_k': camera_k, 'camera_d': camera_d }
 

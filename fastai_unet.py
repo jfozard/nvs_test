@@ -3,6 +3,10 @@ from fastai.torch_basics import *
 from fastai.callback.hook import *
 
 
+"""
+Fastai code for generating UNets from pre-trained vision models
+"""
+
 def _get_sz_change_idxs(sizes):
     "Get the indexes of the layers where the size of the activation changes."
     feature_szs = [size[-1] for size in sizes]

@@ -120,7 +120,7 @@ def sample(model, data, nv):
     B, V = targets.shape[:2]
 
     imagenet_stats = (torch.tensor([0.485, 0.456, 0.406]).cuda(), torch.tensor([0.229, 0.224, 0.225]).cuda())
-    img_tp = (targets - (imagenet_stats[0][None,None,:,None,None]))/(imagenet_stats[1][None,None,:,None,None]) # 0 for orig xkpt
+    img_tp = (targets - (imagenet_stats[0][None,None,:,None,None]))/(imagenet_stats[1][None,None,:,None,None]) 
 
     B, V = img_tp.shape[:2]
     img_tp = img_tp.view(B*V,*img_tp.shape[2:])
@@ -129,13 +129,10 @@ def sample(model, data, nv):
 
     # Downsample targets
 
-
     poses = data['poses'].cuda()
     intrinsics = data['intrinsics']
     camera_k = data['camera_k'].cuda()
     camera_d = data['camera_d'].cuda()
-    #print('intrinsics', intrinsics.shape)
-
 
     cameras  = (camera_k, camera_d, poses[:,:nv])
 

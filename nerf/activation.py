@@ -2,6 +2,10 @@ import torch
 from torch.autograd import Function
 from torch.cuda.amp import custom_bwd, custom_fwd 
 
+"""
+Trunc_exp activation function
+"""
+
 class _trunc_exp(Function):
     @staticmethod
     @custom_fwd(cast_inputs=torch.float)

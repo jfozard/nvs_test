@@ -1,6 +1,11 @@
 
-import os
 
+"""
+Models for generating novel views via a frustum-aligned latent NeRF
+"""
+
+
+import os
 
 import torch
 import torch.nn as nn
@@ -18,7 +23,6 @@ from k_diffusion.augmentation import KarrasDiffAugmentationPipeline
 
 from dlv3.model import DeepLabV3Plus
 
-os.makedirs('sample_output', exist_ok=True)
 
 def tv2(m):
     B, C, I, J = m.shape
@@ -76,7 +80,7 @@ class NerfDiff(nn.Module):
     lambda_opacity : float, optional
         The loss weight penalizing rendering opacity.
 
-    lambda_diffuse : float, optional
+    lambda_diffusion : float, optional
         The loss weight for diffusion objective.
 
     no_cond_prob : float, optional
@@ -251,8 +255,19 @@ class NerfDiffDLV3(nn.Module):
     lambda_opacity : float, optional
         The loss weight penalizing rendering opacity.
 
-    lambda_diffuse : float, optional
+    lambda_diffusion : float, optional
         The loss weight for diffusion objective.
+
+    lambda_depth: float, optional
+        The loss weight for a term which pushes the mean depth towards the distance from the camera to the origin.
+
+    lambda_depth_consistency: float, optional
+        The loss weight measuring consistency between the depths estimated using the first (Q) views and the depth
+        estimated from the final view.
+
+    lambda_opacity_consistency: float, optional
+        The loss weight measuring consistency between the opacities estimated using the first (Q) views and the opacity
+        estimated from the final view.
 
     no_cond_prob : float, optional
         The probability of replacing the rendered NeRF with normally distributed noise,
@@ -271,9 +286,9 @@ class NerfDiffDLV3(nn.Module):
                  lambda_rgb_other=1.0,
                  lambda_opacity=0.001,
                  lambda_diffusion=1.0,
-                 lambda_tv=0.0,
                  lambda_depth=1.0,
-                 lambda_tp=0.0,
+                 lambda_depth_consistency=1.0,
+                 lambda_opacity_consistency=1.0,
                  no_cond_prob=0.1):
 
         super().__init__()
@@ -286,9 +301,9 @@ class NerfDiffDLV3(nn.Module):
         self.lambda_rgb_other = lambda_rgb_other # Loss weight for rgb rendering of NeRF from novel view
         self.lambda_opacity = lambda_opacity # Loss weight penalizing rendering opacity
         self.lambda_diffusion = lambda_diffusion # Loss weight for diffusion objective
-        self.lambda_tv = lambda_tv # Loss weight for diffusion objective
-        self.lambda_tp = lambda_tp
         self.lambda_depth = lambda_depth # Loss weight for diffusion objective
+        self.lambda_depth_consistency = lambda_depth_consistency # Loss weight for diffusion objective
+        self.lambda_opacity_consistency = lambda_opacity_consistency # Loss weight for diffusion objective
         self.no_cond_prob= no_cond_prob # Probability of replacing the rendered NeRF with normally distributed noise,
                               # and adding a learnt vector to the timestep embedding of the
                               # denoising UNet.
@@ -296,7 +311,7 @@ class NerfDiffDLV3(nn.Module):
 
         print('lrf', self.lambda_rgb_first)
 
-    def forward(self, data):
+    def forward(self, data, depth_consistency=False):
         """
         Forward pass of the model.
 
@@ -333,11 +348,9 @@ class NerfDiffDLV3(nn.Module):
         img_tp = img_tp.view(B*V,*img_tp.shape[2:])
         # Input augmentation (after normalization our images roughly range from -2 to 2, greater range than that in original paper).
         img_tp = img_tp + ((torch.rand([B*V], device=img_tp.device)>0.5)*torch.rand([B*V], device=img_tp.device))[:,None,None,None]*torch.randn_like(img_tp)
-        triplanes = self.input_unet(torch.flip(img_tp[:,:],[2])) # Triplanes for the first view
-        triplanes = triplanes.view(B, V, *triplanes.shape[1:])[:,:nv].contiguous()
+        triplanes_all = self.input_unet(torch.flip(img_tp[:,:],[2])) # Triplanes for the first view
+        triplanes = triplanes_all.view(B, V, *triplanes_all.shape[1:])[:,:nv].contiguous()
 
-        #loss_tp = self.lambda_tp*(triplanes[:,:,:32,:,:]**2).mean()
-        
         # Downsample targets
 
         poses = data['poses'].cuda()
@@ -352,10 +365,6 @@ class NerfDiffDLV3(nn.Module):
         render_poses = torch.cat([poses[:,:(Q-1)], poses[:,-1:]], dim=1)
 
         first_view, d1, o1 = render_multi_view(self.nerf, render_poses, intrinsics[0], triplanes, cameras)
-        
-        #loss_tv = self.lambda_tv*tv2(d1[:,-1])
-        #loss_depth = -self.lambda_depth*d1.mean()
-
 
         if self.train_diffusion_resolution == 128:
             first_view= F.interpolate(first_view.view(B*Q, *first_view.shape[2:]), scale_factor = 2)
@@ -370,9 +379,14 @@ class NerfDiffDLV3(nn.Module):
             o1 = o1.expand(-1,-1,3,-1,-1)
 
 
-        loss_rgb = self.lambda_rgb_first*((first_view_rgb[:,0] - targets[:,0:1])**2).mean() + self.lambda_rgb_other*((first_view_rgb[:,-1] - targets[:,-1:])**2).mean() 
+        loss_rgb = self.lambda_rgb_first*((first_view_rgb[:,0] - targets[:,0:1])**2).mean() + self.lambda_rgb_other*((first_view_rgb[:,-1] - targets[:,-1:])**2).mean()
+
+        # Penalize non-zero occupancy - attempt to remove floaters and other density that doesn't contribute to image
         loss_opacity =self.lambda_opacity*(o1.mean())
 
+        # Try to ensure mean depth is close to difference from camera - try to avoid "floating filter"
+        # near camera which might be being used to indicate view-angle dependent uncertainty
+        
         loss_depth = self.lambda_depth*(o1*(d1/(o1+1e-6)-camera_d[:,None,None,None,None])**2).mean()
         
         # Denoise target image, guided by multi-channel rendering
@@ -383,18 +397,14 @@ class NerfDiffDLV3(nn.Module):
             if self.diff_augmentation_prob and random.random() > self.diff_augmentation_prob:
                 # Differentiable aug - apply to both targets and rendering
                 mat, cond = self.diff_aug.get_mat_cond(first_view[:,-1])
-                target, _, _ = self.diff_aug.apply(targets[:,-1], mat, cond)
-                image, _, _ = self.diff_aug.apply(first_view[:,-1], mat, cond)
-
+                target, _, _ = self.diff_aug.apply(targets[:,-1], mat, cond)     # Apply augmentation to target image
+                image, _, _ = self.diff_aug.apply(first_view[:,-1], mat, cond)   # Apply augmentation to novel view rendering
                 #Diffusion reconstruction loss
                 loss_train_diffusion = self.lambda_diffusion*self.ddpm_pipeline.train_step(target, image,  cond_flag=cond_flag, aug_cond=cond)
             else:
-#                mat, cond = self.diff_aug.get_mat_cond(first_view[:,0])
-#                target, _, _ = self.diff_aug.apply(targets[:,0], mat, cond)
-#                image, _, _ = self.diff_aug.apply(first_view[:,0], mat, cond)
-            #Diffusion reconstruction loss
-                mat, cond = self.diff_aug.get_mat_cond(first_view[:,-1])
-                cond = torch.zeros_like(cond)
+                #Diffusion reconstruction loss without augmentation
+                mat, cond = self.diff_aug.get_mat_cond(first_view[:,-1]) # Get the conditioning vector size
+                cond = torch.zeros_like(cond)                            # Zero out conditioning vector
                 target = targets[:,-1]
                 image = first_view[:,-1]
 
@@ -403,10 +413,30 @@ class NerfDiffDLV3(nn.Module):
         else:
             loss_train_diffusion = torch.tensor([0.0], device=targets.device)
 	# Combined loss
-        loss = loss_train_diffusion +loss_rgb + loss_opacity +loss_depth #+loss_tv + loss_tp
 
-        loss_details = { 'rgb': loss_rgb, 'opacity': loss_opacity, 'diffusion': loss_train_diffusion, 'depth': loss_depth}#, 'tv':loss_tv, 'tp':loss_tp}
+        if depth_consistency:
+            # Render from last view - compare self vs novel depth
+            # Check whether uses much more VRAM
+            
+            cameras  = (camera_k, camera_d, poses[:,-1:])
 
-        #print(loss_details)
+            render_poses = torch.cat([poses[:,:(Q-1)], poses[:,-1:]], dim=1)
+
+            other_triplanes = triplanes_all.view(B, V, *triplanes_all.shape[1:])[:,-1:].contiguous()
+
+            second_view, d2, o2 = render_multi_view(self.nerf, render_poses, intrinsics[0], other_triplanes, cameras)
+
+            loss_depth_consistency = self.lambda_depth_consistency*((d2-d1)**2).mean()
+            loss_opacity_consistency = self.lambda_opacity_consistency*((o2-o1)**2).mean()
+        else:
+            loss_depth_consistency = 0.0
+            loss_opacity_consistency = 0.0
+        
+        loss_details = { 'rgb': loss_rgb, 'opacity': loss_opacity, 'diffusion': loss_train_diffusion, 'depth': loss_depth,
+                         'depth_consistency': loss_depth_consistency, 'opacity_consistency': loss_opacity_consistency }
+
+        loss = loss_train_diffusion + loss_rgb + loss_opacity +loss_depth + loss_depth_consistency + loss_opacity_consistency
+
+        
         return loss, loss_details
 

@@ -27,11 +27,6 @@ from torch.utils.data.distributed import DistributedSampler
 
 import wandb
 
-# Different tasks  
-#   1) just train RGB
-#   2) import pre-trained diffusion model (unconditional)
-#   3) train at 64x64
-#   4) train at 128x128, importing 64x64 model
 
 # Options - augment inputs, diffaugment on outputs
 def setup(rank, world_size):
@@ -51,11 +46,6 @@ def prepare(rank, world_size, dataset, batch_size=32, pin_memory=False, num_work
 def cleanup():
     "Cleans up the distributed environment"
     dist.destroy_process_group()
-
-
-
-
-
 
 
 @torch.no_grad()
@@ -187,8 +177,6 @@ def generate_spherical_cam_to_world(radius, n_poses=120, d_th=-5, d_phi=-5):
         cam_to_world = trans_t(radius)
         cam_to_world = rotation_phi(phi / 180. * np.pi) @ cam_to_world
         cam_to_world = rotation_theta(theta) @ cam_to_world
-        #cam_to_world = np.array([[-1, 0, 0, 0], [0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 1]],
-        #                        dtype=np.float32) @ cam_to_world
         return cam_to_world
 
     spheric_cams = []

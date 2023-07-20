@@ -2,14 +2,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
-from activation import trunc_exp
+from .activation import trunc_exp
 from .renderer_multi import NeRFRenderer
 
 import numpy as np
 from einops import einsum
 
 from .utils import safe_normalize
-
 
 import itertools
 
@@ -43,7 +42,6 @@ class BasicBlock(nn.Module):
 
         return out    
 
-    
     
 class MLP(nn.Module):
     def __init__(self, dim_in, dim_out, dim_hidden, num_layers, activation='softplus', bias=True, bias_out=True, block=BasicBlock, norm=False):
@@ -111,15 +109,10 @@ class NeRFNetwork(NeRFRenderer):
 
         self.frustrum = True
 
-
-        #self.sigma_color_mat = self.init_one_svd(self.sigma_color_rank, self.resolution)
-        #self.normal_mat = self.init_one_svd(self.normal_rank, self.resolution_normal, scale=(0.01, 0.01))	
-
         self.num_layers = num_layers
         self.hidden_dim = hidden_dim
 
         self.sigma_color_net = MLP(self.sigma_color_rank, 1+self.color_feat_dim, hidden_dim, num_layers, bias=True)
-        #self.normal_net = MLP(sum(self.normal_rank), 3, normal_hidden_dim, normal_num_layers, bias=True, bias_out=False, norm=True, activation='relu')
 
         self.density_activation =  F.softplus
 
@@ -129,7 +122,6 @@ class NeRFNetwork(NeRFRenderer):
 
     def get_sigma_color_feat(self, x, triplanes):
 
-        #print('sc x', x.shape)
         B, V, Q, N, S = x.shape[0:5]  # BVQN3
         d = self.resolution_z
 
@@ -138,15 +130,10 @@ class NeRFNetwork(NeRFRenderer):
         B, V, C, H, W = triplanes.shape
         triplanes = triplanes.view(B*V, C//d, d, H, W)
 
-        #print('B N Q V C S', B, N, Q, V, C, S)
-        
-        #print('x', x.shape, B*V)
+        print(x.shape, B*V)
         mat_coord = x.view(B*V,1,1,-1,3)
-        #print('mat coord', mat_coord.shape)
         mat_feat = F.grid_sample(triplanes, mat_coord, align_corners=True)
-        #print('mat_feat_sampled', mat_feat.shape, N) # [B*V, C, 1, 1, Q*N*S]
         mat_feat = mat_feat.view(B, V, -1, Q, N*S) # [B*V, C, 1, 1, Q*N*S] -> [ B, V, C, Q, N*S]
-        #print('mat_feat', mat_feat.shape, N)
 
         sigma_color_feat = mat_feat.permute((0,1,3,4,2)) # [ B V C Q NS ] -> [B V Q N*S C]
 
@@ -155,9 +142,7 @@ class NeRFNetwork(NeRFRenderer):
     def get_cam_coords(self, x, cameras):
         # normalize to [-1, 1] inside aabb_train
         #x = 2 * (x - self.aabb_train[:3]) / (self.aabb_train[3:] - self.aabb_train[:3]) - 1
-
-#        aabb = self.aabb_train if self.training else self.aabb_infer    
-        
+                
         camera_k, camera_d, poses = cameras
 
         # Poses are R, T, cam -> world
@@ -165,8 +150,6 @@ class NeRFNetwork(NeRFRenderer):
         T = poses[:,:,:3,3]   # [B,V,3]
         camera_d = T.norm(dim=2)
         # x has shape [B,Q,N,3]
-
-        #print('x T R', x.shape, T.shape, R.shape)
 
         # x  [B, Q, N, S, 3]
     
@@ -178,7 +161,6 @@ class NeRFNetwork(NeRFRenderer):
             # print('camera_k', camera_k.shape, camera_d.shape, x[...,0:2].shape)
             # This is wrong
             x[..., 0:2] = camera_k[:,None,None,None,None,None]*x[...,0:2]/torch.clip(camera_d[:,:,None,None,None,None] - x[...,2:3], 1e-6)
-
             x = torch.min(torch.max(x, self.aabb_train[:3]), self.aabb_train[3:])
 
         x_cam = 2 * (x - self.aabb_train[:3]) / (self.aabb_train[3:] - self.aabb_train[:3]) - 1
@@ -192,23 +174,19 @@ class NeRFNetwork(NeRFRenderer):
 
         # Convert points into camera coordinates
 
-
         x_cam = self.get_cam_coords(x, cameras)
 
         # sigma
         sigma_color_feat = self.get_sigma_color_feat(x_cam, triplanes) # [B V Q N*S C]
-        #print('x tp scf', x_cam.shape, triplanes.shape, sigma_color_feat.shape)
         sigma_color_feat = self.sigma_color_net(sigma_color_feat) # [B V Q N*S 17]
-        #print('scf2', sigma_color_feat.shape)
 
         sigma_color_feat = sigma_color_feat.mean(dim=1) # Average over V==projected views
-        # Split this
-        #print('scf3', sigma_color_feat.shape)
+        # Split this into density (sigma) and colour features
 
         sigma_feat = sigma_color_feat[...,0]
         color_feat = sigma_color_feat[...,1:]
         
-        
+        # Exp or softplus activation for density
         sigma = self.density_activation(sigma_feat)
 
         # sigmoid activation for rgb
@@ -223,22 +201,15 @@ class NeRFNetwork(NeRFRenderer):
     def density(self, x, triplanes, cameras):
         # x: [N, 3], in [-bound, bound]
 
-        #print('density x shape', x.shape)
-
         x_cam = self.get_cam_coords(x, cameras)
         
         sigma_color_feat = self.get_sigma_color_feat(x_cam, triplanes)
-
-        #print('x tp scf', x_cam.shape, triplanes.shape, sigma_color_feat.shape)
-
-
         sigma_color_feat = self.sigma_color_net(sigma_color_feat).mean(dim=1)
-
-        #print('density scf2', sigma_color_feat.shape)
 
 
         sigma_feat = sigma_color_feat[...,0]
-        
+
+        # Exp or softplus activation for density
         sigma = self.density_activation(sigma_feat)
         color_feat = sigma_color_feat[...,1:]
         
@@ -277,15 +248,4 @@ class NeRFNetwork(NeRFRenderer):
 
         return normal
 
-    """
-    # optimizer utils
-    def get_params(self, lr):
-        lr1 = lr2 = lr
-        params = [
-            {'params': self.sigma_color_mat, 'lr': lr1}, 
-            {'params': self.normal_mat, 'lr': lr1/100}, 
-            {'params': self.sigma_color_net.parameters(), 'lr': lr2},
-            {'params': self.normal_net.parameters(), 'lr': lr2},
-        ]
-        return params
-    """ 
+

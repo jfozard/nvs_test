@@ -2,20 +2,9 @@
 
 """Trains Karras et al. (2022) diffusion models."""
 
-import argparse
-from copy import deepcopy
-from functools import partial
-import math
-import json
-from pathlib import Path
-
-import accelerate
 import torch
-from torch import nn, optim
-from torch import multiprocessing as mp
-from torch.utils import data
-from torchvision import datasets, transforms, utils
-from tqdm.auto import trange, tqdm
+from torch import nn
+from torchvision import transforms
 
 import k_diffusion as K
 
@@ -28,20 +17,9 @@ class KPipeline(nn.Module):
         print(model_config)
         model_config['unet_cond_dim'] = 16
         self.size = model_config['input_size']
-
-
         self.inner_model = K.config.make_model(self.config)
 
-
-        print('Parameters:', K.utils.n_params(self.inner_model))
-
-
-        self.tf = transforms.Compose([
-            transforms.Resize(self.size[0], interpolation=transforms.InterpolationMode.LANCZOS),
-            transforms.CenterCrop(self.size[0]),
-            K.augmentation.KarrasAugmentationPipeline(model_config['augment_prob']),
-        ])
-
+        print('K Parameters:', K.utils.n_params(self.inner_model))
 
         self.sigma_min = model_config['sigma_min']
         self.sigma_max = model_config['sigma_max']
@@ -85,9 +63,6 @@ class KPipeline(nn.Module):
 
     def train_step(self, reals, cond, cond_flag=0, aug_cond=None):
         # Augmentation step with conditioning
-        #reals, _, aug_cond = batch[image_key]
-
-        #
         noise = torch.randn_like(reals)
         if cond_flag:
             cond = torch.rand_like(cond)
@@ -97,6 +72,4 @@ class KPipeline(nn.Module):
         return loss
    
 
-
-#a = DDPMPipeline()
 
