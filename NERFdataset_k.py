@@ -54,7 +54,7 @@ class dataset(Dataset):
 
         print(len(allthevid))
         
-        random.seed(0)
+        random.seed(1)
         random.shuffle(allthevid)
         if split == 'train':
             self.ids = allthevid[:int(len(allthevid)*0.9)]
