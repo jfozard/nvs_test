@@ -311,7 +311,7 @@ class NerfDiffDLV3(nn.Module):
 
         print('lrf', self.lambda_rgb_first)
 
-    def forward(self, data, depth_consistency=False):
+    def forward(self, data, depth_consistency=True):
         """
         Forward pass of the model.
 
@@ -424,13 +424,19 @@ class NerfDiffDLV3(nn.Module):
 
             other_triplanes = triplanes_all.view(B, V, *triplanes_all.shape[1:])[:,-1:].contiguous()
 
-            second_view, d2, o2 = render_multi_view(self.nerf, render_poses, intrinsics[0], other_triplanes, cameras)
+            with torch.no_grad():
+                second_view, d2, o2 = render_multi_view(self.nerf, render_poses, intrinsics[0], other_triplanes, cameras)
+                d2 = F.interpolate(d2.view(B*Q,*d2.shape[2:]), scale_factor = 2).expand(-1,3,-1,-1)
+                d2 = d2.view(B, Q, *d2.shape[1:])
+                o2 = F.interpolate(o2.view(B*Q,*o2.shape[2:]), scale_factor = 2).expand(-1,3,-1,-1)
+                o2 = o2.view(B, Q, *o2.shape[1:])
 
             loss_depth_consistency = self.lambda_depth_consistency*((d2-d1)**2).mean()
             loss_opacity_consistency = self.lambda_opacity_consistency*((o2-o1)**2).mean()
         else:
-            loss_depth_consistency = 0.0
-            loss_opacity_consistency = 0.0
+            loss_depth_consistency = torch.tensor([0.0]).cuda()
+            loss_opacity_consistency = torch.tensor([0.0]).cuda()
+
         
         loss_details = { 'rgb': loss_rgb, 'opacity': loss_opacity, 'diffusion': loss_train_diffusion, 'depth': loss_depth,
                          'depth_consistency': loss_depth_consistency, 'opacity_consistency': loss_opacity_consistency }

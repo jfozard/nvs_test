@@ -231,7 +231,7 @@ def sample_images(rank, world_size, transfer="", use_wandb = False):
 
         print('resume from: ', transfer)
 
-        ckpt = torch.load(os.path.join(transfer, 'large-k-multi-latest.pt'))#, map_location=map_location)
+        ckpt = torch.load(os.path.join(transfer))#, 'large-k-multi-latest.pt'))#, map_location=map_location)
 
         model.module.load_state_dict(ckpt['model'])
 

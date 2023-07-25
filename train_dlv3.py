@@ -436,7 +436,7 @@ def train(rank, world_size, cfg):
             
 
     
-@hydra.main(version_base="1.2", config_path="config", config_name="config64")
+@hydra.main(version_base="1.2", config_path="config", config_name="orig_noise")
 def main(cfg : DictConfig) -> None:
     print(OmegaConf.to_yaml(cfg))
     n_gpus = torch.cuda.device_count()

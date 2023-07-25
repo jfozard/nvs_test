@@ -98,7 +98,7 @@ def sample_sphere(model, data, source_view_idx, sample_view_batch=2):
 
     
     ref_pose = poses[:,0]
-    sphere_poses = generate_spherical_cam_to_world(camera_d[0].cpu(), n_poses=120)
+    sphere_poses = generate_spherical_cam_to_world(camera_d[0].cpu(), n_poses=200)
   
     poses = torch.tensor(sphere_poses[None]).cuda()
 
@@ -186,8 +186,8 @@ def generate_spherical_cam_to_world(radius, n_poses=120, d_th=-5, d_phi=-5):
             [np.sin(th), 0, np.cos(th), 0],
             [0, 0, 0, 1],
         ], dtype=np.float32)
-        cam_to_world = trans_t(radius)
-        cam_to_world = rotation_phi(phi / 180. * np.pi) @ cam_to_world
+       # cam_to_world = trans_t(radius)
+        cam_to_world = rotation_phi(phi / 180. * np.pi) #@ cam_to_world
         cam_to_world = rotation_theta(theta) @ cam_to_world
         cam_to_world = np.array([[-1, 0, 0, 0], [0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 1]],
                                 dtype=np.float32) @ cam_to_world
@@ -281,6 +281,18 @@ def sample(model, data, source_view_idx, sample_view_batch=2):
 
 
 
+def convert_and_make_grid(views):
+    def convert(x):
+        return x.numpy().transpose(1,2,0)
+
+    views = list(map(convert, views))
+
+    output = np.concatenate( (np.concatenate(views[:2], axis=1), np.concatenate(views[2:], axis=1)))
+
+    return output
+    
+
+
 def sample_images(rank, world_size, transfer="", cond_views=1, use_wandb = False):
 
     setup(rank, world_size)
@@ -357,12 +369,9 @@ def sample_images(rank, world_size, transfer="", cond_views=1, use_wandb = False
         
         for k in range(render_output_views.shape[1]):
  
-            output = np.concatenate(((#original_views[0,k].numpy().transpose(1,2,0),
-                                      render_output_views[0,k].numpy().transpose(1,2,0),
-                                      render_rgb_views[0,k].numpy().transpose(1,2,0),
-                                      render_output_depth[0,k].numpy().transpose(1,2,0),
-                                      render_output_opacities[0,k].numpy().transpose(1,2,0))))
             
+
+            output = convert_and_make_grid((render_output_views[0,k], render_rgb_views[0,k], render_output_depth[0,k], render_output_opacities[0,k]))
             
             output = (255*np.clip(output,0,1)).astype(np.uint8)
             imwrite(f'output_view_dlv3/sample-{cond_views}-{step:06d}-{k}.png', output)

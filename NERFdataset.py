@@ -43,7 +43,7 @@ class _RepeatSampler(object):
 
 class dataset(Dataset):
     
-    def __init__(self, split, path='data/cars_train/', picklefile='data/cars.pickle', imgsize=128, nerf_view=(0,0), normalize_first_view=True, nimg=4, seed=1):
+    def __init__(self, split, path='data/cars_train/', picklefile='data/cars.pickle', imgsize=128, nerf_view=(0,0), normalize_first_view=True, nimg=4, seed=1, first_view=None):
         self.imgsize = imgsize
         self.path = path
         super().__init__()
@@ -64,7 +64,8 @@ class dataset(Dataset):
         self.nerf_view = nerf_view
         self.nimg=nimg
         self.normalize_first_view = normalize_first_view
-
+        self.first_view=first_view
+        
     def __len__(self):
         return len(self.ids)
     
@@ -84,8 +85,11 @@ class dataset(Dataset):
             indices = self.picklefile[item]
             random.shuffle(indices)
         else:
-            indices = random.sample(self.picklefile[item], k=self.nimg)
-
+            if self.first_view is None:
+                indices = random.sample(self.picklefile[item], k=self.nimg)
+            else:
+                indices = [self.picklefile[item][self.first_view]] + random.sample(self.picklefile[item], k=self.nimg-1)
+                
         imgs = []
         poses = []
         for i in indices:
