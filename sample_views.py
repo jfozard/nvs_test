@@ -102,7 +102,7 @@ def sample_sphere(model, data, source_view_idx, sample_view_batch=2):
   
     poses = torch.tensor(sphere_poses[None]).cuda()
 
-    poses[:,:,:3,:3] = poses[:,:,:3,:3] @ ref_pose[:, None, :3,:3]
+    poses[:,:,:3,:3] = poses[:,:,:3,:3] #@ ref_pose[:, None, :3,:3]
 
     print('ref_pose', ref_pose)
     print('first_pose', poses[:,0])
@@ -187,8 +187,8 @@ def generate_spherical_cam_to_world(radius, n_poses=120, d_th=-5, d_phi=-5):
         cam_to_world = trans_t(radius)
         cam_to_world = rotation_phi(phi / 180. * np.pi) @ cam_to_world
         cam_to_world = rotation_theta(theta) @ cam_to_world
-        #cam_to_world = np.array([[-1, 0, 0, 0], [0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 1]],
-        #                        dtype=np.float32) @ cam_to_world
+        cam_to_world = np.array([[-1, 0, 0, 0], [0, 0, 1, 0], [0, 1, 0, 0], [0, 0, 0, 1]],
+                                dtype=np.float32) @ cam_to_world
         return cam_to_world
 
     spheric_cams = []
@@ -298,7 +298,7 @@ def sample_images(rank, world_size, transfer="", use_wandb = False):
 
 
 
-    d = dataset('test',  imgsize=image_size, nimg=None)
+    d = dataset('test',  imgsize=image_size, nimg=None, normalize_first_view=False)
     
     sampler, loader = prepare(rank, world_size, d, batch_size=batch_size)
 
@@ -332,34 +332,37 @@ def sample_images(rank, world_size, transfer="", use_wandb = False):
     
     pbar = tqdm(loader)
 
-    cond_view_list = [0, 1]
-
+        
     for step, data in enumerate(pbar):
+
         if step==n_samples:
             cleanup()
             return
 
-        original_views, render_output_views, render_rgb_views, render_output_depth, render_output_opacities = sample_sphere(model, data, cond_view_list)
+        for nv in [1,2]:
+            cond_view_list = list(range(nv))
 
-        conditioning_views = original_views
-        output = np.concatenate([v.numpy().transpose(1,2,0) for v in conditioning_views[0,:]])
-        output = (255*np.clip(output,0,1)).astype(np.uint8)
+            original_views, render_output_views, render_rgb_views, render_output_depth, render_output_opacities = sample_sphere(model, data, cond_view_list)
 
-        imwrite(f'output_view/conditioning-{step:06d}.png', output)
-
-        for k in range(render_output_views.shape[1]):
- 
-            output = np.concatenate(((render_output_views[0,k].numpy().transpose(1,2,0),
-                                      render_rgb_views[0,k].numpy().transpose(1,2,0))))
-            
-            
+            conditioning_views = original_views
+            output = np.concatenate([v.numpy().transpose(1,2,0) for v in conditioning_views[0,:]])
             output = (255*np.clip(output,0,1)).astype(np.uint8)
-            imwrite(f'output_view/sample-{step:06d}-{k}.png', output)
 
-        del original_views, render_output_views, render_rgb_views, render_output_depth, render_output_opacities
+            imwrite(f'output_view/conditioning-{nv}-{step:06d}.png', output)
+
+            for k in range(render_output_views.shape[1]):
+
+                output = np.concatenate(((render_output_views[0,k].numpy().transpose(1,2,0),
+                                          render_rgb_views[0,k].numpy().transpose(1,2,0))))
+
+
+                output = (255*np.clip(output,0,1)).astype(np.uint8)
+                imwrite(f'output_view/sample-{nv}-{step:06d}-{k}.png', output)
+
+            del original_views, render_output_views, render_rgb_views, render_output_depth, render_output_opacities
 
             
-    cleanup()
+    Cleanup()
 
 
 
