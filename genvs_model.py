@@ -311,7 +311,7 @@ class NerfDiffDLV3(nn.Module):
 
         print('lrf', self.lambda_rgb_first)
 
-    def forward(self, data, depth_consistency=True):
+    def forward(self, data, depth_consistency=False):
         """
         Forward pass of the model.
 

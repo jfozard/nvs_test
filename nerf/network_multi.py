@@ -130,7 +130,6 @@ class NeRFNetwork(NeRFRenderer):
         B, V, C, H, W = triplanes.shape
         triplanes = triplanes.view(B*V, C//d, d, H, W)
 
-        print(x.shape, B*V)
         mat_coord = x.view(B*V,1,1,-1,3)
         mat_feat = F.grid_sample(triplanes, mat_coord, align_corners=True)
         mat_feat = mat_feat.view(B, V, -1, Q, N*S) # [B*V, C, 1, 1, Q*N*S] -> [ B, V, C, Q, N*S]

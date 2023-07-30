@@ -17,7 +17,7 @@ from NERFdataset_k import dataset
 from nerf.utils import render_multi_view
 import torch.nn as nn
 
-from genvs_model import NerfDiffDLV3
+from genvs_model import NerfDiff
 
 import torch.distributed as dist
 import torch.multiprocessing as mp
@@ -124,7 +124,7 @@ def sample_sphere_ar(model, data, source_view_idx, sample_view_batch=2, n_itm=1)
     render_output_opacities = []
 
     ref_pose = poses[:,0]
-    sphere_poses = generate_circle_poses(data['poses'][0, source_view_idx[0]].numpy(), camera_d[0].cpu(), n_poses=200)
+    sphere_poses = generate_circle_poses(data['poses'][0, source_view_idx[0]].numpy(), camera_d[0].cpu(), n_poses=120)
   
     poses = torch.tensor(sphere_poses[None]).cuda()
 
@@ -283,12 +283,12 @@ def sample_images(rank, world_size, transfer="", cond_views=1, use_wandb = False
 
 
 
-    d = dataset('test', imgsize=image_size, nimg=4, normalize_first_view=False, first_view=0)
+    d = dataset('test', imgsize=image_size, nimg=4, normalize_first_view=False)
     
     sampler, loader = prepare(rank, world_size, d, batch_size=batch_size)
 
     # Model setting
-    model = NerfDiffDLV3().cuda()
+    model = NerfDiff().cuda()
     
     model = nn.SyncBatchNorm.convert_sync_batchnorm(model)
 
@@ -335,7 +335,7 @@ def sample_images(rank, world_size, transfer="", cond_views=1, use_wandb = False
         output = np.concatenate([v.numpy().transpose(1,2,0) for v in conditioning_views[0,:]])
         output = (255*np.clip(output,0,1)).astype(np.uint8)
 
-        imwrite(f'output_view_dlv3/conditioning-{cond_views}-{step:06d}.png', output)
+        imwrite(f'output_view_ar/conditioning-{cond_views}-{step:06d}.png', output)
 
         
         for k in range(render_output_views.shape[1]):
@@ -345,12 +345,12 @@ def sample_images(rank, world_size, transfer="", cond_views=1, use_wandb = False
             output = convert_and_make_grid((render_output_views[0,k], render_rgb_views[0,k], render_output_depth[0,k], render_output_opacities[0,k]))
             
             output = (255*np.clip(output,0,1)).astype(np.uint8)
-            imwrite(f'output_view_dlv3/sample_comb-ar-{cond_views}-{step:06d}-{k}.png', output)
+            imwrite(f'output_view_ar/sample_comb-{cond_views}-{step:06d}-{k}.png', output)
 
             output = render_output_views[0,k].cpu().numpy().transpose(1,2,0)
             
             output = (255*np.clip(output,0,1)).astype(np.uint8)
-            imwrite(f'output_view_dlv3/sample-ar-{cond_views}-{step:06d}-{k}.png', output)
+            imwrite(f'output_view_ar/sample-{cond_views}-{step:06d}-{k}.png', output)
 
         del original_views, render_output_views, render_rgb_views, render_output_depth, render_output_opacities
 
