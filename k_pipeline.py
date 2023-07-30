@@ -33,13 +33,16 @@ class KPipeline(nn.Module):
         return self.model.parameters()
 
     @torch.no_grad()
-    def sample(self, cond, sampling_timesteps=None):
+    def sample(self, cond, sampling_timesteps=None, stochastic=True):):
         x = torch.randn([cond.shape[0], self.config['model']['input_channels'], self.size[0], self.size[1]], device=cond.device) * self.sigma_max
         N = 250 if sampling_timesteps is None else sampling_timesteps
         sigmas = K.sampling.get_sigmas_karras(N, self.sigma_min, self.sigma_max, rho=7., device=cond.device)
         #x_0 = K.sampling.sample_euler(self.model, x, sigmas, s_tmin=0., s_tmax=float('inf'), s_noise=1.003, s_churn=0.4*N, extra_args={'unet_cond':cond})
         #print(sigmas)
-        x_0 = K.sampling.sample_euler(self.model, x, sigmas, s_tmin=0., s_tmax=float('inf'), s_churn=0.4*N, s_noise=1.003, extra_args={'unet_cond':cond})
+        if stochastic:
+            x_0 = K.sampling.sample_euler(self.model, x, sigmas, s_tmin=0., s_tmax=float('inf'), s_churn=0.4*N, s_noise=1.003, extra_args={'unet_cond':cond})
+        else:
+            x_0 = K.sampling.sample_euler(self.model, x, sigmas, extra_args={'unet_cond':cond})
         #x_0 = K.sampling.sample_dpm_2(self.model, x, sigmas, extra_args={'unet_cond':cond})
         print(x_0.min(), x_0.max())
         return x_0.clip(-1.0,1.0)
@@ -54,7 +57,7 @@ class KPipeline(nn.Module):
         return x_0.clip(-1.0,1.0)
     
     @torch.no_grad()
-    def sample_all(self, cond, sampling_timesteps=None):
+    def sample_all(self, cond, sampling_timesteps=None, stochastic=True):
         x = torch.randn([cond.shape[0], self.config['model']['input_channels'], self.size[0], self.size[1]], device=cond.device) * self.sigma_max
         N = 250 if sampling_timesteps is None else sampling_timesteps
 
@@ -62,7 +65,10 @@ class KPipeline(nn.Module):
         progress = []
         def callback(u):
             progress.append(u['denoised'].clip(-1.0,1.0).cpu())
-        x_0 = K.sampling.sample_euler(self.model, x, sigmas, s_tmin=0., s_tmax=float('inf'), s_noise=1.003, s_churn=0.4*N, extra_args={'unet_cond':cond}, callback=callback)
+        if stochastic:
+            x_0 = K.sampling.sample_euler(self.model, x, sigmas, s_tmin=0., s_tmax=float('inf'), s_noise=1.003, s_churn=0.4*N, extra_args={'unet_cond':cond}, callback=callback)
+        else:
+            x_0 = K.sampling.sample_euler(self.model, x, sigmas, extra_args={'unet_cond':cond}, callback=callback)
         progress.append(x_0.clip(-1.0,1.0).cpu())
         progress = torch.stack(progress, dim=0)
         return progress
