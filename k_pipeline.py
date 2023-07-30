@@ -48,26 +48,23 @@ class KPipeline(nn.Module):
     def sample_uc(self, cond, sampling_timesteps=None):
         cond = torch.rand_like(cond)
         x = torch.randn([cond.shape[0], self.config['model']['input_channels'], self.size[0], self.size[1]], device=cond.device) * self.sigma_max
-        N = 100 if sampling_timesteps is None else sampling_timesteps
+        N = 250 if sampling_timesteps is None else sampling_timesteps
         sigmas = K.sampling.get_sigmas_karras(N, self.sigma_min, self.sigma_max, rho=7., device=cond.device)
-        #print(sigmas)
-        #x_0 = K.sampling.sample_dpm_2(self.model, x, sigmas, s_tmin=0., s_tmax=float('inf'), s_noise=1.003, s_churn=40.0, extra_args={'unet_cond':cond})
-        #x_0 = K.sampling.sample_euler(self.model, x, sigmas,  s_tmin=0., s_tmax=float('inf'), s_noise=1.003, s_churn=100.0, extra_args={'unet_cond':cond})
-        #x_0 = K.sampling.sample_euler(self.model, x, sigmas,  s_tmin=0., s_tmax=float('inf'), s_noise=1.003, s_churn=0.4*N, extra_args={'unet_cond':cond})
-        x_0 = K.sampling.sample_euler(self.model, x, 1.4*sigmas,  s_tmin=0., s_tmax=float('inf'), s_noise=1.003, s_churn=0.0*N, extra_args={'unet_cond':cond})
-        print(x_0.min(), x_0.max())
+        x_0 = K.sampling.sample_euler(self.model, x, sigmas,  s_tmin=0., s_tmax=float('inf'), s_noise=1.003, s_churn=0.4*N, extra_args={'unet_cond':cond})
         return x_0.clip(-1.0,1.0)
     
     @torch.no_grad()
     def sample_all(self, cond, sampling_timesteps=None):
-        x = torch.randn([cond.shape[0], self.config['model']['input_channels'], self.size[0], self.size[1]], device=self.device) * self.sigma_max
-        sigmas = K.sampling.get_sigmas_karras(50 if sampling_timesteps is None else sampling_timesteps, self.sigma_min, self.sigma_max, rho=7., device=cond.device)
+        x = torch.randn([cond.shape[0], self.config['model']['input_channels'], self.size[0], self.size[1]], device=cond.device) * self.sigma_max
+        N = 250 if sampling_timesteps is None else sampling_timesteps
+
+        sigmas = K.sampling.get_sigmas_karras(N, self.sigma_min, self.sigma_max, rho=7., device=cond.device)
         progress = []
         def callback(u):
             progress.append(u['denoised'].clip(-1.0,1.0).cpu())
-        x_0 = K.sampling.sample_dpmpp_2m(self.model, x, sigmas,   extra_args={'unet_cond':cond}, callback=callback)
-        print(x_0.min(), x_0.max())
-        progress.append(x_0.clip(-1.0,1.0))
+        x_0 = K.sampling.sample_euler(self.model, x, sigmas, s_tmin=0., s_tmax=float('inf'), s_noise=1.003, s_churn=0.4*N, extra_args={'unet_cond':cond}, callback=callback)
+        progress.append(x_0.clip(-1.0,1.0).cpu())
+        progress = torch.stack(progress, dim=0)
         return progress
 
     def train_step(self, reals, cond, cond_flag=0, aug_cond=None):

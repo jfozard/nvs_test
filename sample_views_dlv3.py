@@ -25,6 +25,9 @@ import torch.multiprocessing as mp
 from torch.nn.parallel import DistributedDataParallel as DDP
 from torch.utils.data.distributed import DistributedSampler
 
+import math
+import torchvision.utils as utils
+
 import wandb
 
 # Different tasks  
@@ -59,7 +62,7 @@ def cleanup():
 
 
 @torch.no_grad()
-def sample_sphere(model, data, source_view_idx, sample_view_batch=2):
+def sample_sphere(model, data, source_view_idx, progress=False, sample_view_batch=2):
     # model - NerfDiff model
     # data - dataset batch 
     # source_view_idx - list of view indicies used to generate NeRF
@@ -135,12 +138,23 @@ def sample_sphere(model, data, source_view_idx, sample_view_batch=2):
         render_output_opacities.append(o1.cpu())
         render_rgb_views.append(first_view_rgb.cpu())
 
-        samples1 = model.module.ddpm_pipeline.sample(first_view.view(B*QQ, *first_view.shape[2:]))
-        samples1 = samples1.view(B, Q, *samples1.shape[1:])
-        print('s1 shape', samples1.shape)
-        render_output_views.append(samples1.cpu())
+        if progress:
+            samples1 = model.module.ddpm_pipeline.sample_all(first_view.view(B*QQ, *first_view.shape[2:]))
+            print('s1 orig shape', samples1.shape)
+            samples1 = samples1.view(samples1.shape[0], B, QQ, *samples1.shape[2:])
+            print('s1 shape', samples1.shape)
+            render_output_views.append(samples1.cpu())
 
-    render_output_views = torch.cat(render_output_views, dim=1)
+        else:
+            samples1 = model.module.ddpm_pipeline.sample(first_view.view(B*QQ, *first_view.shape[2:]))
+            samples1 = samples1.view(B, QQ, *samples1.shape[1:])
+            print('s1 shape', samples1.shape)
+            render_output_views.append(samples1.cpu())
+
+    if progress:
+        render_output_views = torch.cat(render_output_views, dim=2)
+    else:
+        render_output_views = torch.cat(render_output_views, dim=1)
     render_output_depth = torch.cat(render_output_depth, dim=1)
     render_output_opacities = torch.cat(render_output_opacities, dim=1)
     render_rgb_views = torch.cat(render_rgb_views, dim=1)
@@ -293,7 +307,7 @@ def convert_and_make_grid(views):
     
 
 
-def sample_images(rank, world_size, transfer="", cond_views=1, use_wandb = False):
+def sample_images(rank, world_size, transfer="", cond_views=1, progress=False, prefix="cars", use_wandb = False):
 
     setup(rank, world_size)
 
@@ -358,23 +372,47 @@ def sample_images(rank, world_size, transfer="", cond_views=1, use_wandb = False
             cleanup()
             return
 
-        original_views, render_output_views, render_rgb_views, render_output_depth, render_output_opacities = sample_sphere(model, data, cond_view_list)
+        original_views, render_output_views, render_rgb_views, render_output_depth, render_output_opacities = sample_sphere(model, data, cond_view_list, progress=progress)
 
-        conditioning_views = original_views
-        output = np.concatenate([v.numpy().transpose(1,2,0) for v in conditioning_views[0,:]])
-        output = (255*np.clip(output,0,1)).astype(np.uint8)
+        if progress:
+            conditioning_views = original_views
+            output = np.concatenate([v.numpy().transpose(1,2,0) for v in conditioning_views[0,:]])
+            output = (255*np.clip(output,0,1)).astype(np.uint8)
 
-        imwrite(f'output_view_dlv3/conditioning-{cond_views}-{step:06d}.png', output)
+            imwrite(f'output_view_dlv3/{prefix}-conditioning-{cond_views}-{step:06d}.png', output)
+
+            print('rovs', render_output_views.shape)
+            for j in range(render_output_views.shape[0]):
+
+                na = render_output_views.shape[2]
+                output = render_output_views[j,0]
+                
+                grid = utils.make_grid(output, nrow=math.ceil(na ** 0.5), padding=0)
+            
+                output = (255*np.clip(grid.cpu().numpy().transpose(1,2,0), 0, 1)).astype(np.uint8)
+                imwrite(f'output_view_dlv3/{prefix}-step-{cond_views}-{step:06d}-{j}.png', output)   
+        
+            for k in range(render_output_views.shape[2]):
+            
+                output = convert_and_make_grid((render_output_views[-1,0,k], render_rgb_views[-1,k], render_output_depth[-1,k], render_output_opacities[-1,k]))
+            
+                output = (255*np.clip(output,0,1)).astype(np.uint8)
+                imwrite(f'output_view_dlv3/{prefix}-sample-{cond_views}-{step:06d}-{k}.png', output)
+
+        else:
+            conditioning_views = original_views
+            output = np.concatenate([v.numpy().transpose(1,2,0) for v in conditioning_views[0,:]])
+            output = (255*np.clip(output,0,1)).astype(np.uint8)
+
+            imwrite(f'output_view_dlv3/{prefix}-conditioning-{cond_views}-{step:06d}.png', output)
 
         
-        for k in range(render_output_views.shape[1]):
- 
+            for k in range(render_output_views.shape[1]):
             
-
-            output = convert_and_make_grid((render_output_views[0,k], render_rgb_views[0,k], render_output_depth[0,k], render_output_opacities[0,k]))
+                output = convert_and_make_grid((render_output_views[0,k], render_rgb_views[0,k], render_output_depth[0,k], render_output_opacities[0,k]))
             
-            output = (255*np.clip(output,0,1)).astype(np.uint8)
-            imwrite(f'output_view_dlv3/sample-stoch-{cond_views}-{step:06d}-{k}.png', output)
+                output = (255*np.clip(output,0,1)).astype(np.uint8)
+                imwrite(f'output_view_dlv3/{prefix}-sample-{cond_views}-{step:06d}-{k}.png', output)
 
         del original_views, render_output_views, render_rgb_views, render_output_depth, render_output_opacities
 
@@ -387,8 +425,9 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument('--transfer',type=str, default="")
     parser.add_argument('--cond_views',type=int, default=1)
+    parser.add_argument('--prefix',type=str, default="cars")
+    parser.add_argument('--progress', action="store_true")
     args = parser.parse_args()
     n_gpus = torch.cuda.device_count()
-    #assert n_gpus >= 2, f"Requires at least 2 GPUs to run, but got {n_gpus}"
     world_size = n_gpus
-    mp.spawn(sample_images, args=(world_size,args.transfer, args.cond_views), nprocs=world_size, join=True)
+    mp.spawn(sample_images, args=(world_size,args.transfer, args.cond_views, args.progress, args.prefix), nprocs=world_size, join=True)
