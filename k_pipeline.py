@@ -33,7 +33,7 @@ class KPipeline(nn.Module):
         return self.model.parameters()
 
     @torch.no_grad()
-    def sample(self, cond, sampling_timesteps=None, stochastic=True):):
+    def sample(self, cond, sampling_timesteps=None, stochastic=True):
         x = torch.randn([cond.shape[0], self.config['model']['input_channels'], self.size[0], self.size[1]], device=cond.device) * self.sigma_max
         N = 250 if sampling_timesteps is None else sampling_timesteps
         sigmas = K.sampling.get_sigmas_karras(N, self.sigma_min, self.sigma_max, rho=7., device=cond.device)
