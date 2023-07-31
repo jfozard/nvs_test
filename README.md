@@ -77,40 +77,44 @@ These clearly need a bit more training!
 #### Conditioned on a single view
 
 Conditioning image
-
-![conditioning-000000](https://github.com/jfozard/nvs_test/assets/4390954/bdc0d595-aae6-43f3-8acb-ac79d880161a)
-
-Novel views generated (upper - denoised samples, lower- RGB renderings from NeRF)
-
-https://github.com/jfozard/nvs_test/assets/4390954/e8cab1ae-a7ae-4bd0-b11d-8a103ed5fdfb
-
-
-![conditioning-000001](https://github.com/jfozard/nvs_test/assets/4390954/4f04e2fb-3ea0-4d62-a637-5b600f0552da)
-
-https://github.com/jfozard/nvs_test/assets/4390954/c8a61989-df03-4ddc-b950-4d1bbd13a764
-
-
-
-#### Conditioned on two views
-
-
-Conditioning images
-
-![conditioning-2-000000](https://github.com/jfozard/nvs_test/assets/4390954/2bad2f1b-0c3f-4621-bae7-a99a086efee6)
-
+![cars-conditioning-1-000000](https://github.com/jfozard/nvs_test/assets/4390954/0574042b-e372-4743-9433-d0cf209cd5a7)
 
 Novel views generated (upper - denoised samples, lower- RGB renderings from NeRF)
 
 
-https://github.com/jfozard/nvs_test/assets/4390954/be3d3a38-f46b-46d1-8c0d-0b74702dca82
+Stochastic sampling
+
+https://github.com/jfozard/nvs_test/assets/4390954/cd744bbd-9bdb-427a-a46c-be70f1a65e19
+
+Deterministic sampling
+
+https://github.com/jfozard/nvs_test/assets/4390954/fc45bd4d-0e34-455f-8d34-56ea20176c6b
+
+Sampling progress (stochastic)
+
+https://github.com/jfozard/nvs_test/assets/4390954/bdd2b8a1-8e31-4ee7-9949-6ca0efc9b98f
+
+Sampling progress (deterministic)
+
+https://github.com/jfozard/nvs_test/assets/4390954/c1a5acfd-2d34-4d55-8d14-95d71141a806
 
 
 
-![conditioning-2-000002](https://github.com/jfozard/nvs_test/assets/4390954/22e8f0d7-925f-4c40-94d9-555ec129227d)
+
+![cars-conditioning-1-000001](https://github.com/jfozard/nvs_test/assets/4390954/6882b749-dd47-486e-9377-8bb4c19da051)
 
 
 
-https://github.com/jfozard/nvs_test/assets/4390954/6d022466-bd50-49ff-8a50-5f84ee181b2a
+https://github.com/jfozard/nvs_test/assets/4390954/a76015f1-2dc5-421c-8d17-405758c2cecd
+
+https://github.com/jfozard/nvs_test/assets/4390954/e2c8f175-c4a3-465a-ae14-4a39a11ff506
+
+
+
+
+https://github.com/jfozard/nvs_test/assets/4390954/4b8f6f5c-95e6-419d-8a10-2a98640c099e
+
+https://github.com/jfozard/nvs_test/assets/4390954/8c0aecd0-1744-4a0c-bfab-8803265905b4
 
 
 
@@ -118,13 +122,17 @@ https://github.com/jfozard/nvs_test/assets/4390954/6d022466-bd50-49ff-8a50-5f84e
 
 #### Unconditional samples (Supply pure noise conditioning image to diffusing model)
 
-![uc-sample-000000-0](https://github.com/jfozard/nvs_test/assets/4390954/67825263-c5f8-44ab-a532-b1d02f79e9b5)
+Stochastic
 
-![uc-sample-000000-1](https://github.com/jfozard/nvs_test/assets/4390954/310c63fa-0304-48d5-bca9-7e46102a1342)
+![uc-step-1-000000-250](https://github.com/jfozard/nvs_test/assets/4390954/590c4fd7-9b47-4390-bdfb-ef50446639e0)
 
-![uc-sample-000000-2](https://github.com/jfozard/nvs_test/assets/4390954/e441616c-8430-475d-a635-312df65f816e)
+https://github.com/jfozard/nvs_test/assets/4390954/6fedfdae-7ae3-4e95-bb00-6af90235b3e0
 
-![uc-sample-000000-3](https://github.com/jfozard/nvs_test/assets/4390954/7f956fc2-0da8-4010-948c-dae115afeff3)
+Deterministic
+
+![uc_det-step-1-000000-250](https://github.com/jfozard/nvs_test/assets/4390954/6771b11d-23ff-48f4-8928-993900186c5e)
+
+https://github.com/jfozard/nvs_test/assets/4390954/2aa18fa4-3317-4d29-b3e8-97bf3f337f4e
 
 
 
