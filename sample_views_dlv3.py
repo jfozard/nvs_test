@@ -62,7 +62,7 @@ def cleanup():
 
 
 @torch.no_grad()
-def sample_sphere(model, data, source_view_idx, progress=False, stochastic=True, sample_view_batch=2):
+def sample_sphere(model, data, source_view_idx, progress=False, stochastic=True, unconditional=False, sample_view_batch=2):
     # model - NerfDiff model
     # data - dataset batch 
     # source_view_idx - list of view indicies used to generate NeRF
@@ -139,14 +139,14 @@ def sample_sphere(model, data, source_view_idx, progress=False, stochastic=True,
         render_rgb_views.append(first_view_rgb.cpu())
 
         if progress:
-            samples1 = model.module.ddpm_pipeline.sample_all(first_view.view(B*QQ, *first_view.shape[2:]), stochastic=stochastic)
+            samples1 = model.module.ddpm_pipeline.sample_all(first_view.view(B*QQ, *first_view.shape[2:]), stochastic=stochastic, unconditional=unconditional)
             print('s1 orig shape', samples1.shape)
             samples1 = samples1.view(samples1.shape[0], B, QQ, *samples1.shape[2:])
             print('s1 shape', samples1.shape)
             render_output_views.append(samples1.cpu())
 
         else:
-            samples1 = model.module.ddpm_pipeline.sample(first_view.view(B*QQ, *first_view.shape[2:]), stochastic=stochastic)
+            samples1 = model.module.ddpm_pipeline.sample(first_view.view(B*QQ, *first_view.shape[2:]), stochastic=stochastic, unconditional=unconditional)
             samples1 = samples1.view(B, QQ, *samples1.shape[1:])
             print('s1 shape', samples1.shape)
             render_output_views.append(samples1.cpu())
@@ -307,7 +307,7 @@ def convert_and_make_grid(views):
     
 
 
-def sample_images(rank, world_size, transfer="", cond_views=1, progress=False,  prefix="cars", stochastic=False, use_wandb = False):
+def sample_images(rank, world_size, transfer="", cond_views=1, progress=False,  prefix="cars", stochastic=False, unconditional=False, use_wandb = False):
 
     setup(rank, world_size)
 
@@ -372,7 +372,7 @@ def sample_images(rank, world_size, transfer="", cond_views=1, progress=False,  
             cleanup()
             return
 
-        original_views, render_output_views, render_rgb_views, render_output_depth, render_output_opacities = sample_sphere(model, data, cond_view_list, progress=progress, stochastic=stochastic)
+        original_views, render_output_views, render_rgb_views, render_output_depth, render_output_opacities = sample_sphere(model, data, cond_view_list, progress=progress, stochastic=stochastic, unconditional=unconditional)
 
         if progress:
             conditioning_views = original_views
@@ -428,7 +428,8 @@ if __name__ == "__main__":
     parser.add_argument('--prefix',type=str, default="cars")
     parser.add_argument('--progress', action="store_true")
     parser.add_argument('--stochastic', action="store_true")
+    parser.add_argument('--unconditional', action="store_true")
     args = parser.parse_args()
     n_gpus = torch.cuda.device_count()
     world_size = n_gpus
-    mp.spawn(sample_images, args=(world_size,args.transfer, args.cond_views, args.progress, args.prefix, args.stochastic), nprocs=world_size, join=True)
+    mp.spawn(sample_images, args=(world_size,args.transfer, args.cond_views, args.progress, args.prefix, args.stochastic, args.unconditional), nprocs=world_size, join=True)
