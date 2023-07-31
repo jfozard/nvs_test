@@ -51,6 +51,9 @@ image to NeRF models, combining them and then further finetuning at resolutions 
 Increased SNR levels (lonormal distribution with mean 1.0, standard deviation 1.4) were used for this (see k-configs/config_64_cars_noisy.json), and then subsequently dropped later in training. This is much higher noise levels
 than in the original paper, but we want good predictions of the denoised image at high noise levels.
 
+Noise levels dropped slightly (mean 0.5, standard deviation 1.4) for further fine-tuning. Still considerably higher than those in the EDM paper (mean -1.2 standard deviation 1.2). Scope for further experimentation - this task is different to standard diffusion
+as the conditioning with an extra image is far more informative than a text prompt.
+
 To train the dlv3 branch, the original UNet translating images to NeRF parameters was replaced by the DeepLabV3+ like
 model and the whole model trained for another ~ 3days.
 
